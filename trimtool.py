@@ -1,6 +1,7 @@
-import os, sys
+import os, sys, gc, csv
 import ui, logic
 from functools import partial
+from collections import namedtuple
 from PySide2 import QtWidgets, QtGui
 
 # MAIN WINDOW
@@ -21,8 +22,6 @@ class TrimmingTool(QtWidgets.QMainWindow, ui.UiTrimmingTool, logic.VideoLogic):
 
         self.hasvignettepath = False
         self.cantrim = False
-        # specific to our lab
-        self.delimter = 'Suanda'
 
         # misc UI
         # for some reason, ALL edits won't stick unless at least 1 of these
@@ -55,20 +54,24 @@ class TrimmingTool(QtWidgets.QMainWindow, ui.UiTrimmingTool, logic.VideoLogic):
 
     def startbatchmode(self):
         self.batch_dialogbox(self.window)
+
         # connections
-        # self.vingrb.toggled.connect(lambda: self.trimbatchmode = False)
-        self.trimfilebtn.clicked.connect(partial(self.batch.loading,
-                                                 self.trimfilelbl
-                                                 ))
+        self.trimmoderdbtn.toggled.connect(partial(self.batch.setmode, self.trimmoderdbtn))
+        self.vignmoderdbtn.toggled.connect(partial(self.batch.setmode, self.vignmoderdbtn))
 
-        self.beginbatchbtn.clicked.connect(partial(self.batch.batchstart,
-                                                   self.beepchk.isChecked()))
+        self.format_trimbtn.clicked.connect(partial(self.batch_format_msgbox, False))
+        self.format_vigbtn.clicked.connect(partial(self.batch_format_msgbox, True))
 
+        self.batchuploadbtn.clicked.connect(partial(self.batch.loading, self.batchpathlbl))
+        self.beginbatchbtn.clicked.connect(partial(self.batch.batchstart))
+
+        # Execute only after connected
         self.batchwindow.exec_()
 
     # upload = False == save btn
     def loadsave(self, upload):
         if upload:
+            self.hasvignettepath = False
             file = QtWidgets.QFileDialog.getOpenFileName(filter="Videos (*.mp4)")[0]
             file = os.path.join(file).replace('\\', '/')
             if len(file) < 1:
@@ -78,8 +81,8 @@ class TrimmingTool(QtWidgets.QMainWindow, ui.UiTrimmingTool, logic.VideoLogic):
                 self.filename = os.path.splitext(file)[0]
                 self.savepath = self.checkexisting(os.path.splitext(file)[0])
 
-                self.filelbl.setText('...' + str(file.split(self.delimter)[1]))
-                self.savelbl.setText('...' + str(self.savepath.split(self.delimter)[1]))
+                self.filelbl.setText('.../' + str(os.path.split(file)[1]))
+                self.savelbl.setText('.../' + str(os.path.split(self.savepath)[1]))
         else:
             file = QtWidgets.QFileDialog.getSaveFileName(filter="Videos (*.mp4)")[0].replace('\\', '/')
             file = os.path.join(file).replace('\\', '/')
@@ -87,10 +90,10 @@ class TrimmingTool(QtWidgets.QMainWindow, ui.UiTrimmingTool, logic.VideoLogic):
                 pass
             else:
                 # choosing own save name
-                try: # save only to Q drive
-                    self.savepath = self.checkexisting(file, addon='')
-                    self.filename = os.path.splitext(os.path.split(file)[1])[0]
-                    self.savelbl.setText('...' + str(self.savepath.split(self.delimter)[1]))
+                self.savepath = self.checkexisting(file, addon='')
+                self.filename = os.path.splitext(os.path.split(file)[1])[0]
+                try:  # save only to Q drive
+                    self.savelbl.setText('...' + str(os.path.split(self.savepath)[1]))
                 except IndexError:
                     self.msg.savepathbox()
 
@@ -99,11 +102,7 @@ class TrimmingTool(QtWidgets.QMainWindow, ui.UiTrimmingTool, logic.VideoLogic):
         end = None
 
         # checks if ALL the timestamps are just 0's
-        # i don't want to make a temp variable or func for this thing... but...
-        if 2 > len(set(
-                j for i in [
-                    [int(n) for n in t.split(":")] for t in
-                    [self.startedit.text(), self.endedit.text(), self.durationedit.text()]] for j in i)):
+        if self.allzeros_check():
             self.questionbox()
             return None
         else:
@@ -117,18 +116,11 @@ class TrimmingTool(QtWidgets.QMainWindow, ui.UiTrimmingTool, logic.VideoLogic):
 
             # makes the folder and places it into folder for later beep'ing
             if self.vignchkbx.isChecked():
-                oldsavepath = os.path.split(self.savepath)  # (desired save location, filename_trimmed)
+                self.hasvignettepath, self.savepath = self.foldergenerate(self.savepath, self.hasvignettepath)
 
-                if not self.hasvignettepath:
-                    folder, name = self.makevignettepath(self.savepath)
-                    if folder and name:
-                        self.hasvignettepath = True
-                        self.savepath = self.checkexisting(folder + os.sep + name, '_original')
-                else:
-                    filename = str(oldsavepath[1].rsplit('_trimmed')[0])
-                    self.savepath = self.checkexisting(oldsavepath[0] + os.sep + filename, '_original')
         # open ffmpeg
         if self.cantrim:
+            # for some reason formatting issues on PC, these 2 lines fix it
             videopath = self.filepath.replace('\\', '/')
             savepath = os.path.join(self.savepath).replace('\\', '/')
 
@@ -137,8 +129,16 @@ class TrimmingTool(QtWidgets.QMainWindow, ui.UiTrimmingTool, logic.VideoLogic):
             else:
                 self.msg.confirmbox(False)
             self.cantrim = False  # reset
+            gc.collect()
         else:  # missing parameters
             self.msg.questionbox()
+
+    # Checks if all timestamps are just 0's
+    # Seperate function to make starttrim little cleaner
+    def allzeros_check(self):
+        times = [self.startedit.text(), self.endedit.text(), self.durationedit.text()]
+        return 2 > len(set(j for i in [[int(n) for n in t.split(":")] for t in times] for j in i))
+
 
 # VIGNETTE LOGISTICS
 class VignetteTool(logic.VideoLogic):
@@ -147,7 +147,6 @@ class VignetteTool(logic.VideoLogic):
         self.msg = ui.UIMessageBoxes()
 
         # specific to our lab
-        self.delimter = "Suanda"
         self.beepfile = "vignette_beep.wav"
 
         self.timesegments = []
@@ -155,7 +154,7 @@ class VignetteTool(logic.VideoLogic):
         self.csvpath = ""
 
         self.usedefault = True
-        self.defaultlength = 1.0 # one second
+        self.defaultlength = 0.5
 
         self.vig_savepath = ""
         self.beep_savepath = ""
@@ -163,17 +162,17 @@ class VignetteTool(logic.VideoLogic):
     def loadtimes(self, lbl):
         self.csvpath = self.loadfile("CSVs (*.csv)")
         if self.csvpath:
-            lbl.setText('...' + str(self.csvpath.split(self.delimter)[1]))
+            lbl.setText('...' + str(os.path.split(self.csvpath)[1]))
 
     def loadvideo(self, lbl):
         self.rawvideopath = self.loadfile("Videos (*.mp4)", ".mp4")
         if self.rawvideopath:
-            lbl.setText('...' + str(self.rawvideopath.split(self.delimter)[1]))
+            lbl.setText('...' + str(os.path.split(self.rawvideopath)[1]))
 
     def loadbeep(self, lbl):
         self.beepfile = self.loadfile("Audio (*.wav)")
         if self.beepfile:
-            lbl.setText('...' + str(self.beepfile.split(self.delimter)[1]))
+            lbl.setText('...' + str(os.path.split(self.beepfile)[1]))
 
     # loads in desired file type
     def loadfile(self, filetype, extension=None):
@@ -221,48 +220,63 @@ class BatchTool(logic.VideoLogic):
         super(BatchTool, self).__init__()
         self.msg = ui.UIMessageBoxes()
 
-        self.trimcsv = ''  # trim csv
-        self.savefolder = ''  # main save folder
-        self.delimter = 'Suanda'
+        self.batchcsv = ''  # batch csv file
+        self.trimmode = True  # False = vignettes
 
-    def batchstart(self, hasvignettes = False):
-        failedtrims = self.batchtrim(self.trimcsv, self.savefolder)
+        self.batches = []
 
-        if isinstance(failedtrims, list):
-            if len(failedtrims) > 0:
-                print(failedtrims)
-            else:  # empty list
+    # toggles between trimmer + vignettes mode
+    def setmode(self, button, _):
+        btn = button.text().lower()  # type: str
+        if btn.startswith('t'):
+            self.trimmode = True
+        elif btn.startswith('v'):
+            self.trimmode = False
+        else:
+            print(btn)
+            print(button.text())
+
+    def batchstart(self):
+        # placeholders
+        failures = []
+
+        # prevent misclicks
+        if self.batchcsv:
+            self.batches = self.batch_parsecsv(self.batchcsv)  # returns list of lists
+
+            if not self.batches:
+                self.msg.permissionerrorbox()
+
+            if self.trimmode:
+                failures = self.batchtrim(self.batchcsv)
+            else:
+                failures = self.batchvignette(self.batchcsv)
+
+            # operation success
+            if not failures:
                 self.msg.confirmbox(True)
-        elif not failedtrims:
-            self.msg.permissionerrorbox()
+            else:
+                self.logger(self.batchcsv, failures)
+                self.msg.confirmbox(False, failures)
 
-        if hasvignettes:
-            failedbeeps = self.batchvignette(self.savefolder)
-            if isinstance(failedbeeps, list):
-                if len(failedbeeps) > 0:
-                    print(failedbeeps)
-                else:
-                    self.msg.confirmbox(True)
-            return None
+    def logger(self, csvfile, loglist):
+        pass
+
 
     def loading(self, lbl):
-
         file = QtWidgets.QFileDialog.getOpenFileName(filter="CSVs (*.csv)")[0]
         file = os.path.join(file).replace('\\', '/')
 
         if len(file) < 1:
             return None
         else:
-            self.trimcsv = file
-            try:
-                lbl.setText('...' + str(self.trimcsv.split(self.delimter)[1]))
-            except:
-                lbl.setText(self.trimcsv)
+            if os.access(file, os.R_OK):  # might cut this out
+                pass
+            else:
+                self.msg.permissionerrorbox(checking=True)
 
-        self.savefolder = os.path.join(os.path.split(file)[0], 'Vignettes').replace('\\','/')
-
-        if not os.path.exists(self.savefolder):
-            os.makedirs(self.savefolder)
+            self.batchcsv = file
+            lbl.setText('...' + str(os.path.split(self.batchcsv)[1]))
 
 
 if __name__ == "__main__":
