@@ -8,7 +8,7 @@ class VideoLogic:
     def __init__(self):
         self.defaultlength = 0.5  # 0.5 seconds
         self.defaultbeeptime = 30  # 30 seconds in
-        self.beepfile = "vignette_beep.wav"
+        self.beepfile = "resources/vignette_beep.wav"
 
         self.beep_savepath = ''
 
@@ -119,7 +119,6 @@ class VideoLogic:
 
     # runs ffmpeg commands for making muted copy + beeped video
     def generatevignette(self, rawvideopath, mutedpath, vignettevideopath, audiopath):
-
         mutedprocess = subprocess.Popen(
             [
                 r'ffmpeg',

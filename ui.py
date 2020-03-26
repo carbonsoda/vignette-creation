@@ -152,7 +152,7 @@ class UiTrimmingTool:
         self.vigwindow = QtWidgets.QDialog(parent)
 
         self.vigwindow.setWindowTitle('Vignette Tool')
-        self.vigwindow.setWindowIcon(QtGui.QIcon("main.ico"))
+        self.vigwindow.setWindowIcon(QtGui.QIcon("resources/main.ico"))
         self.vigwindow.setFont(QtGui.QFont("Arial", 11))
         self.vigwindow.setFixedSize(QtCore.QSize(500, 300))
 
@@ -238,7 +238,7 @@ class UiTrimmingTool:
         self.batchwindow = QtWidgets.QDialog(parent)
 
         self.batchwindow.setWindowTitle('Batch Mode')
-        self.batchwindow.setWindowIcon(QtGui.QIcon("batch.ico"))
+        self.batchwindow.setWindowIcon(QtGui.QIcon("resources/batch.ico"))
         self.batchwindow.setFont(QtGui.QFont("Arial", 10))
         self.batchwindow.setFixedSize(QtCore.QSize(400, 300))
 

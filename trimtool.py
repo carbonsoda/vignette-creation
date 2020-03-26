@@ -1,8 +1,11 @@
-import os, sys, gc, csv
-import ui, logic
+import gc
+import os
+import sys
 from functools import partial
-from collections import namedtuple
 from PySide2 import QtWidgets, QtGui
+import logic
+import ui
+
 
 # MAIN WINDOW
 class TrimmingTool(QtWidgets.QMainWindow, ui.UiTrimmingTool, logic.VideoLogic):
@@ -147,7 +150,7 @@ class VignetteTool(logic.VideoLogic):
         self.msg = ui.UIMessageBoxes()
 
         # specific to our lab
-        self.beepfile = "vignette_beep.wav"
+        self.beepfile = "resources/vignette_beep.wav"
 
         self.timesegments = []
         self.rawvideopath = ""
@@ -214,6 +217,7 @@ class VignetteTool(logic.VideoLogic):
             else:
                 self.msg.confirmbox(True)
 
+
 # CONNECTIONS FOR BATCH
 class BatchTool(logic.VideoLogic):
     def __init__(self, parent=None):
@@ -256,12 +260,7 @@ class BatchTool(logic.VideoLogic):
             if not failures:
                 self.msg.confirmbox(True)
             else:
-                self.logger(self.batchcsv, failures)
                 self.msg.confirmbox(False, failures)
-
-    def logger(self, csvfile, loglist):
-        pass
-
 
     def loading(self, lbl):
         file = QtWidgets.QFileDialog.getOpenFileName(filter="CSVs (*.csv)")[0]
@@ -281,7 +280,7 @@ class BatchTool(logic.VideoLogic):
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
-    app.setWindowIcon(QtGui.QIcon('main.ico'))
+    app.setWindowIcon(QtGui.QIcon('resources/main.ico'))
     # ensures same look for all
     s = QtWidgets.QStyleFactory.create('Fusion')
     app.setStyle(s)
@@ -289,13 +288,7 @@ if __name__ == "__main__":
     # Create and show main window
     window = TrimmingTool()
     window.setWindowTitle('Video Trim Tool')
-    window.setWindowIcon(QtGui.QIcon('main.ico'))
+    window.setWindowIcon(QtGui.QIcon('resources/main.ico'))
     window.show()
 
     sys.exit(app.exec_())
-
-# "/c/Users/nam14014/Desktop/buildfolder/ffmpeg/ffmpeg/resources/vignette_beep.wav:."
-# pyinstaller --icon "/c/Users/nam14014/Desktop/buildfolder/ffmpeg/icon.ico" --add-data "/c/Users/nam14014/Desktop/buildfolder/ffmpeg/ffmpeg/resources/main.ico:." --add-data "/c/Users/nam14014/Desktop/buildfolder/ffmpeg/ffmpeg/resources/vignette_beep.wav:." --add-data "/c/Users/nam14014/Desktop/buildfolder/ffmpeg/ffmpeg/resources/vignette.ico:." --noconsole "ffmpeg/trimtool.py"
-
-
-# ffmpeg -i muted_input.mp4 -i input.wav -c:v copy -map 0:0 -map 1:0 -shortest output.mp4
